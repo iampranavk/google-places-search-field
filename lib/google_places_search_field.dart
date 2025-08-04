@@ -3,13 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
 import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 
+/// A search field widget that uses the Google Places API to suggest locations.
+///
+/// Requires a valid API key from Google Cloud with Places API enabled.
+/// When a place is selected, it returns the coordinates (LatLng) via [onLatLngSelected].
 class GooglePlacesSearchField extends StatefulWidget {
+  /// Your Google API key
   final String apiKey;
+
+  /// Callback when a location is selected. Returns a [maps.LatLng].
   final Function(maps.LatLng) onLatLngSelected;
+
+  /// Optional decoration for the input field.
   final InputDecoration? inputDecoration;
+
+  /// Optional text style for the input text.
   final TextStyle? textStyle;
+
+  /// Hint text for the search field.
   final String hintText;
 
+  /// Creates a [GooglePlacesSearchField].
   const GooglePlacesSearchField({
     super.key,
     required this.apiKey,
@@ -50,6 +64,10 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     });
   }
 
+  /// Handles the logic for selecting a prediction from the list.
+  ///
+  /// It fetches the full place details using the place ID and passes the
+  /// resulting latitude and longitude to the parent callback.
   Future<void> _handlePlaceSelection(AutocompletePrediction prediction) async {
     _controller.text = prediction.primaryText;
     _removeOverlay();
@@ -71,6 +89,7 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     }
   }
 
+  /// Shows the autocomplete suggestions overlay when the input field is focused.
   void _showOverlay() {
     if (_overlayEntry == null) {
       _overlayEntry = _createOverlayEntry();
@@ -78,11 +97,16 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     }
   }
 
+  /// Removes the autocomplete suggestions overlay.
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
   }
 
+  /// Debounced text change handler.
+  ///
+  /// Triggers the autocomplete request after a delay (400ms).
+  /// If the query is empty, clears suggestions.
   void _onTextChanged(String value) {
     if (_debounce?.isActive ?? false) _debounce?.cancel();
 
@@ -111,6 +135,7 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     });
   }
 
+  /// Builds the overlay entry with the list of predictions or loading state.
   OverlayEntry _createOverlayEntry() {
     RenderBox renderBox = context.findRenderObject() as RenderBox;
     Size size = renderBox.size;

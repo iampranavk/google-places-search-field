@@ -23,11 +23,36 @@ A Flutter widget that integrates with the `flutter_google_places_sdk` and `googl
 
 ## Getting started
 
-1. Add your Google Maps API key with Places API enabled.
-2. Make sure the following packages are added in your `pubspec.yaml`:
-   - `flutter_google_places_sdk`
-   - `google_maps_flutter`
-3. Set up billing and permissions for the Google Maps SDK on Android/iOS.
+### Prerequisites
+
+1. Enable the **Places API** and **Maps SDK for Android/iOS** in Google Cloud Console.
+2. Add your API key with the required restrictions.
+
+## Installation
+
+In your `pubspec.yaml`, add:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_google_places_sdk: ^0.3.0
+  google_maps_flutter: ^2.6.0  # or latest
+  google_places_search_field: ^YOUR_UPDATED_VERSION
+  ```
+
+## Platform Support
+
+| Platform | Supported |
+|----------|-----------|
+| Android  | ✅ Yes     |
+| iOS      | ✅ Yes     |
+| Web      | ❌ No      |
+| macOS    | ⚠️ Untested |
+| Windows  | ⚠️ Untested |
+| Linux    | ⚠️ Untested |
+
+> ❗️ This package does **not support Flutter Web** due to limitations in `flutter_google_places_sdk` and `google_maps_flutter`. Consider using `google_maps_webservice` or a platform-channel implementation for web-specific use cases.
 
 ## Usage
 
