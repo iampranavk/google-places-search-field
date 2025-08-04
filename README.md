@@ -36,10 +36,23 @@ In your `pubspec.yaml`, add:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_google_places_sdk: ^0.3.0
-  google_maps_flutter: ^2.6.0  # or latest
-  google_places_search_field: ^YOUR_UPDATED_VERSION
+
+  # Add the latest version
+  flutter_google_places_sdk:
+
+  # Add the latest version
+  google_maps_flutter:
+
+  # This package (use latest)
+  google_places_search_field:
   ```
+
+## Preview
+
+<p align="center">
+  <img src="https://github.com/iampranavk/google-places-search-field/blob/main/assets/google_places_search_field_screen_shot.jpg" width="300" alt="Google Places Search Field Screen Shot" />
+</p>
+
 
 ## Platform Support
 
