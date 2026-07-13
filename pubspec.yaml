@@ -1,6 +1,6 @@
 name: google_places_search_field
 description: "A customizable Flutter widget for searching locations using Google Places Autocomplete with LatLng callback support"
-version: 1.0.2
+version: 2.0.0
 homepage: https://github.com/iampranavk/google-places-search-field
 repository: https://github.com/iampranavk/google-places-search-field
 
@@ -11,8 +11,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_google_places_sdk: ^0.4.2+1
-  google_maps_flutter: ^2.12.3
+  http: ^1.6.0
+  uuid: ^4.5.3
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +24,7 @@ flutter:
 platforms:
   android:
   ios:
+  web:
+  linux:
+  macos:
+  windows:

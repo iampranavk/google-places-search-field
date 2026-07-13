@@ -1,29 +1,66 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:google_places_search_field/models/place_latlng.dart';
+import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
-/// A search field widget that uses the Google Places API to suggest locations.
-///
-/// Requires a valid API key from Google Cloud with Places API enabled.
-/// When a place is selected, it returns the coordinates (LatLng) via [onLatLngSelected].
+/// Lightweight model to replace the heavy SDK prediction object
+class PlacePrediction {
+  final String placeId;
+  final String primaryText;
+  final String secondaryText;
+
+  PlacePrediction({
+    required this.placeId,
+    required this.primaryText,
+    required this.secondaryText,
+  });
+
+  factory PlacePrediction.fromJson(Map<String, dynamic> json) {
+    final structuredFormatting = json['structured_formatting'];
+    return PlacePrediction(
+      placeId: json['place_id'],
+      primaryText: structuredFormatting['main_text'] ?? '',
+      secondaryText: structuredFormatting['secondary_text'] ?? '',
+    );
+  }
+}
+
 class GooglePlacesSearchField extends StatefulWidget {
-  /// Your Google API key
+  /// The Google Cloud Places API key.
+  ///
+  /// Ensure that the Places API is enabled for this key in your
+  /// Google Cloud Console.
   final String apiKey;
 
-  /// Callback when a location is selected. Returns a [maps.LatLng].
-  final Function(maps.LatLng) onLatLngSelected;
+  /// Callback triggered when a location is selected from the dropdown menu.
+  ///
+  /// Returns a [PlaceLatLng] object containing the latitude and longitude
+  /// coordinates of the chosen destination.
+  final Function(PlaceLatLng) onLatLngSelected;
 
-  /// Optional decoration for the input field.
+  /// Optional decoration configuration for the underlying [TextFormField].
+  ///
+  /// Allows you to customize the input fields visual appearance (borders,
+  /// icons, labels) to match your application's design theme.
   final InputDecoration? inputDecoration;
 
-  /// Optional text style for the input text.
+  /// Optional typography style applied to the text entered into the search field.
   final TextStyle? textStyle;
 
-  /// Hint text for the search field.
+  /// The placeholder hint text displayed inside the field when it is empty.
+  ///
+  /// Defaults to 'Search location'.
   final String hintText;
 
-  /// Creates a [GooglePlacesSearchField].
+  /// An optional HTTP client used to execute the underlying network requests.
+  ///
+  /// For standard app development, leave this null. It is primarily used
+  /// to inject a mock HTTP client during unit and widget testing, or to
+  /// supply custom proxy client configurations.
+  final http.Client? httpClient;
+
   const GooglePlacesSearchField({
     super.key,
     required this.apiKey,
@@ -31,6 +68,7 @@ class GooglePlacesSearchField extends StatefulWidget {
     this.hintText = 'Search location',
     this.inputDecoration,
     this.textStyle,
+    this.httpClient,
   });
 
   @override
@@ -39,24 +77,25 @@ class GooglePlacesSearchField extends StatefulWidget {
 }
 
 class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
-  late FlutterGooglePlacesSdk _places;
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
 
-  OverlayEntry? _overlayEntry;
-  List<AutocompletePrediction> _suggestions = [];
-  bool _isLoading = false;
+  // Session Token Management
+  final Uuid _uuid = const Uuid();
+  String? _sessionToken;
 
+  OverlayEntry? _overlayEntry;
+  List<PlacePrediction> _suggestions = [];
+  bool _isLoading = false;
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _places = FlutterGooglePlacesSdk(widget.apiKey);
-
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
+        _generateSessionToken();
         _showOverlay();
       } else {
         _removeOverlay();
@@ -64,32 +103,46 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     });
   }
 
-  /// Handles the logic for selecting a prediction from the list.
-  ///
-  /// It fetches the full place details using the place ID and passes the
-  /// resulting latitude and longitude to the parent callback.
-  Future<void> _handlePlaceSelection(AutocompletePrediction prediction) async {
+  /// Initializes a new session token if one doesn't exist.
+  void _generateSessionToken() {
+    _sessionToken ??= _uuid.v4();
+  }
+
+  Future<void> _handlePlaceSelection(PlacePrediction prediction) async {
     _controller.text = prediction.primaryText;
     _removeOverlay();
     FocusScope.of(context).unfocus();
 
     final placeId = prediction.placeId;
-    // if (placeId!=null) return;
 
-    final response = await _places.fetchPlace(
-      placeId,
-      fields: [PlaceField.Location],
+    // Pass the SAME session token to the Details API to close the billing cycle
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/place/details/json?'
+      'place_id=$placeId&fields=geometry&key=${widget.apiKey}&sessiontoken=$_sessionToken',
     );
 
-    final latLng = response.place?.latLng;
-    if (latLng != null) {
-      widget.onLatLngSelected(maps.LatLng(latLng.lat, latLng.lng));
-    } else {
-      //Print statement if its null
+    try {
+      final response = await (widget.httpClient?.get(url) ?? http.get(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('Place details response: $data');
+        if (data['status'] == 'OK') {
+          final location = data['result']['geometry']['location'];
+          final double lat = (location['lat'] as num).toDouble();
+          final double lng = (location['lng'] as num).toDouble();
+
+          debugPrint('Selected location: $lat, $lng');
+          widget.onLatLngSelected(PlaceLatLng(latitude: lat, longitude: lng));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching place details: $e');
+    } finally {
+      // CLEAR the token so the next search starts a fresh billing session
+      _sessionToken = null;
     }
   }
 
-  /// Shows the autocomplete suggestions overlay when the input field is focused.
   void _showOverlay() {
     if (_overlayEntry == null) {
       _overlayEntry = _createOverlayEntry();
@@ -97,16 +150,11 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
     }
   }
 
-  /// Removes the autocomplete suggestions overlay.
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
   }
 
-  /// Debounced text change handler.
-  ///
-  /// Triggers the autocomplete request after a delay (400ms).
-  /// If the query is empty, clears suggestions.
   void _onTextChanged(String value) {
     if (_debounce?.isActive ?? false) _debounce?.cancel();
 
@@ -121,21 +169,41 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
       }
 
       setState(() => _isLoading = true);
+      _generateSessionToken();
 
-      final response = await _places.findAutocompletePredictions(
-        value,
-        placeTypesFilter: [PlaceTypeFilter.REGIONS],
+      // Autocomplete REST API call passing the session token
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json?'
+        'input=${Uri.encodeComponent(value)}&types=(regions)&key=${widget.apiKey}&sessiontoken=$_sessionToken',
       );
 
-      setState(() {
-        _suggestions = response.predictions;
-        _isLoading = false;
-        _overlayEntry?.markNeedsBuild();
-      });
+      try {
+        final response = await http.get(url);
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['status'] == 'OK') {
+            final predictions = data['predictions'] as List;
+            setState(() {
+              _suggestions = predictions
+                  .map((p) => PlacePrediction.fromJson(p))
+                  .toList();
+            });
+          } else {
+            setState(() => _suggestions = []);
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching predictions: $e');
+        setState(() => _suggestions = []);
+      } finally {
+        setState(() {
+          _isLoading = false;
+          _overlayEntry?.markNeedsBuild();
+        });
+      }
     });
   }
 
-  /// Builds the overlay entry with the list of predictions or loading state.
   OverlayEntry _createOverlayEntry() {
     RenderBox renderBox = context.findRenderObject() as RenderBox;
     Size size = renderBox.size;
@@ -164,12 +232,12 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
                     child: Text(
                       "No results found",
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Color(0XFF8A8486),
+                        color: const Color(0XFF8A8486),
                       ),
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 15),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     shrinkWrap: true,
                     itemCount: _suggestions.length,
                     itemBuilder: (context, index) {
@@ -188,7 +256,7 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
                           prediction.secondaryText,
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: Color(0XFF8A8486),
+                                color: const Color(0XFF8A8486),
                                 fontWeight: FontWeight.w400,
                               ),
                         ),
@@ -232,7 +300,7 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
               filled: true,
               hintText: widget.hintText,
               hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Color(0XFF605F65),
+                color: const Color(0XFF605F65),
                 fontWeight: FontWeight.w500,
               ),
               border: OutlineInputBorder(
