@@ -178,7 +178,7 @@ class _GooglePlacesSearchFieldState extends State<GooglePlacesSearchField> {
       );
 
       try {
-        final response = await http.get(url);
+        final response = await (widget.httpClient?.get(url) ?? http.get(url));
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'OK') {
